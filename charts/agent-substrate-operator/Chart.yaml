@@ -2,7 +2,7 @@ apiVersion: v2
 name: agent-substrate-operator
 description: Operator that installs Agent Substrate from a SubstrateInstall resource.
 type: application
-version: 0.1.0
+version: 0.0.1
 # The operator embeds and installs this Agent Substrate release.
 appVersion: v0.5.0
 home: https://github.com/samueltorres/agent-substrate-operator

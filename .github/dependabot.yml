@@ -4,6 +4,14 @@ updates:
   directory: /
   schedule:
     interval: weekly
+  # Kubernetes and controller-runtime minor versions move together, and with
+  # the embedded Substrate release, so they are bumped by hand. Dependabot
+  # only proposes their patch releases.
+  ignore:
+  - dependency-name: "k8s.io/*"
+    update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - dependency-name: "sigs.k8s.io/controller-runtime"
+    update-types: ["version-update:semver-major", "version-update:semver-minor"]
   groups:
     kubernetes:
       patterns:

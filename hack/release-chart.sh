@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Packages the operator chart for a release tag and pushes it to an OCI
-# registry. It refuses a tag that does not match the chart version, since the
-# chart defaults the operator image to that version.
+# registry. It refuses a tag that does not match the chart version (see
+# hack/check-release-tag.sh).
 #
 #   hack/release-chart.sh <tag> <oci repository>
 #
-#   hack/release-chart.sh v0.1.0 oci://ghcr.io/samueltorres/charts
+#   hack/release-chart.sh v0.0.1 oci://ghcr.io/samueltorres/charts
 #
 # The package is left in dist/, and the pushed reference is printed with its
 # digest, for signing.
@@ -21,11 +21,8 @@ repo="$2"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 chart="${root}/charts/agent-substrate-operator"
-version="$(sed -n 's/^version: *//p' "${chart}/Chart.yaml")"
-if [[ "${tag}" != "v${version}" ]]; then
-  echo "tag ${tag} does not match the chart version ${version}; bump charts/agent-substrate-operator/Chart.yaml" >&2
-  exit 1
-fi
+"${root}/hack/check-release-tag.sh" "${tag}"
+version="${tag#v}"
 
 mkdir -p "${root}/dist"
 helm package "${chart}" --destination "${root}/dist" >&2
