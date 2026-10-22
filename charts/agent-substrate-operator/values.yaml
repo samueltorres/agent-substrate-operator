@@ -1,0 +1,47 @@
+# Operator image.
+image:
+  repository: ghcr.io/samueltorres/agent-substrate-operator
+  # Defaults to the chart version. The chart's appVersion is the Agent
+  # Substrate release the operator installs.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# The operator elects a leader, so extra replicas are standbys.
+replicaCount: 1
+
+logLevel: info
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+serviceAccount:
+  annotations: {}
+
+# The SubstrateInstall to create with the chart. Leave it disabled to manage
+# the resource yourself, e.g. from GitOps. Its name is always "substrate".
+substrateInstall:
+  enabled: false
+  # spec is the SubstrateInstall spec; see the README and examples/. It has
+  # no defaults here, because Helm merges a default map into the one you
+  # pass and would leak fields into it. For example:
+  #
+  #   spec:
+  #     platform: generic
+  #     storage:
+  #       s3:
+  #         region: us-east-1
+  #     atenet:
+  #       credentialProvider:
+  #         name: k8s.io
+  spec: {}

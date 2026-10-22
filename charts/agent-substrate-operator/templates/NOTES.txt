@@ -1,0 +1,20 @@
+The Agent Substrate operator is running in {{ .Release.Namespace }}. It installs
+Agent Substrate {{ .Chart.AppVersion }} as a SubstrateInstall named "substrate" describes.
+{{- if .Values.substrateInstall.enabled }}
+
+This release created that SubstrateInstall. Follow the install with:
+
+  kubectl get substrateinstall substrate -w
+{{- else }}
+
+Create the SubstrateInstall to start the install:
+
+  kubectl apply -f substrateinstall.yaml
+  kubectl get substrateinstall substrate -w
+{{- end }}
+
+To uninstall, delete the SubstrateInstall first and wait for it to go, so the
+operator can let go of it (and tear down under deletionPolicy Delete):
+
+  kubectl delete substrateinstall substrate
+  helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}

@@ -1,0 +1,14 @@
+{{- if .Values.substrateInstall.enabled }}
+apiVersion: substrate.samueltorres.github.io/v1alpha1
+kind: SubstrateInstall
+metadata:
+  name: substrate
+  labels:
+    {{- include "agent-substrate-operator.labels" . | nindent 4 }}
+  annotations:
+    # Uninstalling the chart removes the operator, which the SubstrateInstall's
+    # finalizer needs. Delete the SubstrateInstall first to tear down.
+    helm.sh/resource-policy: keep
+spec:
+  {{- toYaml .Values.substrateInstall.spec | nindent 2 }}
+{{- end }}
