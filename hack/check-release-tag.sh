@@ -3,7 +3,7 @@
 # operator image to its version, so a mismatched tag would publish an image the
 # chart never installs. CI runs this first on a tag, before publishing anything.
 #
-#   hack/check-release-tag.sh v0.1.0
+#   hack/check-release-tag.sh v0.0.1
 
 set -o errexit -o nounset -o pipefail
 

@@ -56,7 +56,7 @@ deleted.
 
 ```bash
 helm install substrate-operator oci://ghcr.io/samueltorres/charts/agent-substrate-operator \
-  --version 0.1.0 --namespace substrate-operator --create-namespace
+  --version 0.0.1 --namespace substrate-operator --create-namespace
 
 kubectl apply -f examples/generic-s3.yaml
 kubectl get substrateinstall substrate -w
@@ -147,7 +147,7 @@ carries SBOM and provenance attestations.
 Verify a signature:
 
 ```bash
-cosign verify ghcr.io/samueltorres/agent-substrate-operator:0.1.0 \
+cosign verify ghcr.io/samueltorres/agent-substrate-operator:0.0.1 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/samueltorres/agent-substrate-operator/\.github/workflows/'
 ```
@@ -156,7 +156,7 @@ cosign verify ghcr.io/samueltorres/agent-substrate-operator:0.1.0 \
 
 1. Set `version` in `charts/agent-substrate-operator/Chart.yaml`. The chart
    defaults the operator image to that version.
-2. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`. CI tests,
+2. Tag and push: `git tag v0.0.1 && git push origin v0.0.1`. CI tests,
    publishes the image and chart, and creates the GitHub release. It refuses
    a tag that does not match the chart version.
 
