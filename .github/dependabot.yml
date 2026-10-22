@@ -4,14 +4,17 @@ updates:
   directory: /
   schedule:
     interval: weekly
-  # Kubernetes and controller-runtime minor versions move together, and with
-  # the embedded Substrate release, so they are bumped by hand. Dependabot
-  # only proposes their patch releases.
+  # Kubernetes, controller-runtime, and kustomize move together, and with the
+  # embedded Substrate release, so they are bumped by hand. Dependabot only
+  # proposes Kubernetes and controller-runtime patch releases. kustomize gets
+  # none: its patch releases pull in a kube-openapi built for the next
+  # Kubernetes minor.
   ignore:
   - dependency-name: "k8s.io/*"
     update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - dependency-name: "sigs.k8s.io/controller-runtime"
     update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - dependency-name: "sigs.k8s.io/kustomize/*"
   groups:
     kubernetes:
       patterns:
