@@ -45,14 +45,23 @@ func (r *renderer) platform(objs []*Object) error {
 	}
 
 	// atelet runs the node's kubelet image credential provider from GKE's
-	// host paths. Elsewhere those paths hold nothing, as on kind, whose
-	// overlay drops them the same way.
-	if r.spec.Platform == v1alpha1.PlatformGeneric {
+	// host paths. EKS nodes keep theirs elsewhere. On other nodes those paths
+	// hold nothing, as on kind, whose overlay drops them the same way.
+	switch r.spec.Platform {
+	case v1alpha1.PlatformGeneric:
 		atelet, err := find(objs, "DaemonSet", "atelet")
 		if err != nil {
 			return err
 		}
 		if err := dropImageCredentialProvider(atelet); err != nil {
+			return err
+		}
+	case v1alpha1.PlatformEKS:
+		atelet, err := find(objs, "DaemonSet", "atelet")
+		if err != nil {
+			return err
+		}
+		if err := setHostPaths(atelet, eksImageCredentialProvider); err != nil {
 			return err
 		}
 	}
@@ -122,6 +131,46 @@ func dropImageCredentialProvider(atelet *Object) error {
 	}
 	removeByName(podSpec, "volumes", imageCredentialProviderVolumes...)
 	return unstructured.SetNestedMap(atelet.Object, podSpec, podSpecPath...)
+}
+
+// hostPath is where a hostPath volume points, and what must be there.
+type hostPath struct{ path, kind string }
+
+// eksImageCredentialProvider is where nodeadm installs the ECR credential
+// provider and writes the kubelet's CredentialProviderConfig on Amazon Linux
+// 2023 nodes. The volumes require both to exist, so a node without them fails
+// atelet's mount rather than gaining empty stand-ins.
+var eksImageCredentialProvider = map[string]hostPath{
+	"image-credential-provider-bin":    {"/etc/eks/image-credential-provider", "Directory"},
+	"image-credential-provider-config": {"/etc/eks/image-credential-provider/config.json", "File"},
+}
+
+// setHostPaths repoints a workload's named hostPath volumes.
+func setHostPaths(obj *Object, paths map[string]hostPath) error {
+	path := append(append([]string{}, podSpecPath...), "volumes")
+	volumes, _, err := unstructured.NestedSlice(obj.Object, path...)
+	if err != nil {
+		return fmt.Errorf("%s: %w", describe(obj), err)
+	}
+	set := 0
+	for i, item := range volumes {
+		v, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := v["name"].(string)
+		p, ok := paths[name]
+		if !ok {
+			continue
+		}
+		v["hostPath"] = map[string]any{"path": p.path, "type": p.kind}
+		volumes[i] = v
+		set++
+	}
+	if set != len(paths) {
+		return fmt.Errorf("%s has %d of the %d hostPath volumes to repoint", describe(obj), set, len(paths))
+	}
+	return unstructured.SetNestedSlice(obj.Object, volumes, path...)
 }
 
 // addCloudSQLProxy adds upstream's Cloud SQL Auth Proxy native sidecar to

@@ -203,6 +203,7 @@ spec:
                 enum:
                 - generic
                 - gke
+                - eks
                 - kind
                 type: string
               podCertificate:
