@@ -1,8 +1,9 @@
 # Operator image.
 image:
   repository: ghcr.io/samueltorres/agent-substrate-operator
-  # Defaults to the chart version. The chart's appVersion is the Agent
-  # Substrate release the operator installs.
+  # Defaults to the chart version, which a release sets from its tag. Set it
+  # when installing the chart from a checkout, whose version is 0.0.0. The
+  # chart's appVersion is the Agent Substrate release the operator installs.
   tag: ""
   pullPolicy: IfNotPresent
 
