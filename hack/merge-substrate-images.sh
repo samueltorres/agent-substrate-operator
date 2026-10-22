@@ -21,31 +21,36 @@ repo="$1"
 tag="$2"
 shift 2
 
-declare -A sources
-for file in "$@"; do
-  while IFS= read -r ref; do
-    [[ -n "${ref}" ]] || continue
-    name="${ref#"${repo}/"}"
-    name="${name%%[:@]*}"
-    digest="${ref##*@}"
-    sources[${name}]+=" ${repo}/${name}@${digest}"
-  done <"${file}"
-done
+# One "<image> <digest>" line per reference, from every file.
+pairs="$(
+  for file in "$@"; do
+    while IFS= read -r ref; do
+      [[ -n "${ref}" ]] || continue
+      name="${ref#"${repo}/"}"
+      echo "${name%%[:@]*} ${ref##*@}"
+    done <"${file}"
+  done | sort -u
+)"
 
-if [[ ${#sources[@]} -eq 0 ]]; then
+if [[ -z "${pairs}" ]]; then
   echo "no image references found in $*" >&2
   exit 1
 fi
 
-for name in "${!sources[@]}"; do
+for name in $(cut -d' ' -f1 <<<"${pairs}" | uniq); do
+  sources=()
+  while read -r image digest; do
+    if [[ "${image}" == "${name}" ]]; then
+      sources+=("${repo}/${name}@${digest}")
+    fi
+  done <<<"${pairs}"
   target="${repo}/${name}:${tag}"
-  # shellcheck disable=SC2086 # the sources are space-separated on purpose
   docker buildx imagetools create --tag "${target}" \
     --annotation "index:org.opencontainers.image.source=https://github.com/samueltorres/agent-substrate-operator" \
     --annotation "index:org.opencontainers.image.url=https://github.com/agent-substrate/substrate/tree/${tag}" \
     --annotation "index:org.opencontainers.image.version=${tag}" \
     --annotation "index:org.opencontainers.image.licenses=Apache-2.0" \
     --annotation "index:org.opencontainers.image.description=Agent Substrate ${tag} ${name}, rebuilt from the upstream tag by agent-substrate-operator" \
-    ${sources[${name}]} >&2
+    "${sources[@]}" >&2
   echo "${repo}/${name}@$(docker buildx imagetools inspect "${target}" --format '{{.Manifest.Digest}}')"
 done

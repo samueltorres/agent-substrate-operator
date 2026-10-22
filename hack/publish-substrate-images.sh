@@ -33,15 +33,33 @@ tag="${TAG:-${version}}"
 
 src="$(mktemp -d)"
 out="$(mktemp)"
-trap 'rm -rf "${src}" "${out}"' EXIT
+kubeconfig="$(mktemp)"
+trap 'rm -rf "${src}" "${out}" "${kubeconfig}"' EXIT
 
 # A clean tree at the release tag, so local changes in the checkout cannot
 # reach the images.
 git -C "${upstream}" archive "${version}" | tar -x -C "${src}"
 
+# ate-setup loads a kubeconfig for every command, though publishing never
+# talks to a cluster. This one names no reachable cluster, so the publish
+# works where there is none, as on CI, and cannot read a real one.
+cat >"${kubeconfig}" <<'EOF'
+apiVersion: v1
+kind: Config
+clusters:
+- name: none
+  cluster:
+    server: https://127.0.0.1:1
+contexts:
+- name: none
+  context:
+    cluster: none
+current-context: none
+EOF
+
 (
   cd "${src}"
-  VERSION="${tag}" go run ./cmd/ate-setup --no-dev-env publish release-images \
+  KUBECONFIG="${kubeconfig}" VERSION="${tag}" go run ./cmd/ate-setup --no-dev-env publish release-images \
     --ko-docker-repo "${repo}" --ko-default-platforms "${platforms}"
 ) | tee "${out}"
 
