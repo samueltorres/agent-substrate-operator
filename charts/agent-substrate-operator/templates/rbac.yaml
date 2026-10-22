@@ -1,0 +1,55 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "agent-substrate-operator.name" . }}
+  labels:
+    {{- include "agent-substrate-operator.labels" . | nindent 4 }}
+rules:
+{{ .Files.Get "files/clusterrole-rules.yaml" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "agent-substrate-operator.name" . }}
+  labels:
+    {{- include "agent-substrate-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "agent-substrate-operator.name" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "agent-substrate-operator.name" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# Leader election.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "agent-substrate-operator.name" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agent-substrate-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "agent-substrate-operator.name" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agent-substrate-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "agent-substrate-operator.name" . }}-leader-election
+subjects:
+- kind: ServiceAccount
+  name: {{ include "agent-substrate-operator.name" . }}
+  namespace: {{ .Release.Namespace }}

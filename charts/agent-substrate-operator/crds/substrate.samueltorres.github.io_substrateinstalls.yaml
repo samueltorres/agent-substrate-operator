@@ -1,0 +1,427 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: substrateinstalls.substrate.samueltorres.github.io
+spec:
+  group: substrate.samueltorres.github.io
+  names:
+    kind: SubstrateInstall
+    listKind: SubstrateInstallList
+    plural: substrateinstalls
+    shortNames:
+    - subi
+    singular: substrateinstall
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.version
+      name: Version
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.step
+      name: Step
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          SubstrateInstall installs Agent Substrate into the cluster. It is
+          cluster-scoped, and the only one allowed is named "substrate".
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              SubstrateInstallSpec is the desired Agent Substrate installation. Field
+              names follow upstream's install.ate.dev/v1alpha1 SubstrateInstall document
+              where one exists.
+            properties:
+              actorJWT:
+                description: ActorJWT configures the actor identity JWTs the egress
+                  gateway mints.
+                properties:
+                  algorithm:
+                    default: ES256
+                    description: |-
+                      Algorithm of the signing key generated on first install. Changing it
+                      later does not rotate the key.
+                    enum:
+                    - ES256
+                    - RS256
+                    type: string
+                  issuer:
+                    description: |-
+                      Issuer is the iss claim of the minted JWTs. Relying parties fetch
+                      <issuer>/.well-known/openid-configuration to verify them. Defaults to
+                      https://idp.ate-system.svc.
+                    pattern: ^https://[^/?#@]+(/[^?#]*)?$
+                    type: string
+                type: object
+              apiServer:
+                description: APIServer configures ate-api-server.
+                properties:
+                  authenticationConfig:
+                    description: |-
+                      AuthenticationConfig replaces the generated authentication.yaml, for
+                      installs that trust more JWT providers. See upstream
+                      docs/authentication.md.
+                    type: string
+                  expectedJWTIssuer:
+                    description: |-
+                      ExpectedJWTIssuer is the service account token issuer ate-api-server
+                      trusts. Defaults to the GKE issuer when gcp is set, then to the
+                      cluster's OpenID discovery document, then to
+                      https://kubernetes.default.svc.
+                    type: string
+                type: object
+              atenet:
+                description: Atenet configures the ingress router and egress gateway.
+                properties:
+                  additionalEgressExtprocService:
+                    description: |-
+                      AdditionalEgressExtprocService adds an ext_proc authorization filter to
+                      the egress gateway, as NAMESPACE/SERVICE:PORT.
+                    pattern: ^[a-z0-9-]+/[a-z0-9-]+:[0-9]+$
+                    type: string
+                  credentialProvider:
+                    description: |-
+                      CredentialProvider is the provider the egress gateway asks for
+                      credentials to inject.
+                    properties:
+                      address:
+                        description: Address is the provider's host:port.
+                        type: string
+                      enabled:
+                        description: Enabled turns egress credential injection on
+                          or off.
+                        type: boolean
+                      name:
+                        description: Name is the host of the ate-secret:// URIs the
+                          provider serves.
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: 'set name (and address unless it is k8s.io), or enabled:
+                        false alone'
+                      rule: '(has(self.enabled) && !self.enabled) ? (!has(self.name)
+                        && !has(self.address)) : has(self.name)'
+                    - message: a provider other than k8s.io needs an address
+                      rule: '!has(self.name) || self.name == ''k8s.io'' || has(self.address)'
+                required:
+                - credentialProvider
+                type: object
+              clusterSize:
+                default: size0
+                description: ClusterSize is the footprint profile.
+                enum:
+                - size0
+                - size10
+                type: string
+              cordonControlPlane:
+                description: |-
+                  CordonControlPlane keeps the control plane off the worker nodes. It
+                  assumes a pool labeled and tainted
+                  ate.dev/workloadType=ate-control-plane:NoSchedule, and a one-node pool
+                  labeled and tainted ate.dev/workloadType=ate-postgres:NoSchedule.
+                type: boolean
+              deletionPolicy:
+                default: Retain
+                description: DeletionPolicy says what deleting this object does to
+                  the cluster.
+                enum:
+                - Retain
+                - Delete
+                type: string
+              gcp:
+                description: |-
+                  GCP names the GKE cluster, from which the service account token issuer
+                  is derived.
+                properties:
+                  clusterLocation:
+                    minLength: 1
+                    type: string
+                  clusterName:
+                    minLength: 1
+                    type: string
+                  projectID:
+                    minLength: 1
+                    type: string
+                required:
+                - clusterLocation
+                - clusterName
+                - projectID
+                type: object
+              images:
+                description: Images says where the Substrate component images are
+                  published.
+                properties:
+                  repository:
+                    description: |-
+                      Repository holds every component image, named as upstream's
+                      `ate-setup publish release-images` publishes them, e.g.
+                      registry.example.com/substrate/ateapi. Defaults to
+                      ghcr.io/samueltorres/substrate, where this project's CI publishes
+                      rebuilds of each upstream release.
+                    type: string
+                  tag:
+                    description: |-
+                      Tag every component image carries. Defaults to the Substrate release
+                      this operator embeds.
+                    type: string
+                type: object
+              otlpEndpoint:
+                description: |-
+                  OTLPEndpoint sends control plane telemetry somewhere other than the
+                  platform default.
+                type: string
+              platform:
+                default: generic
+                description: Platform selects the provider-specific parts of the install.
+                enum:
+                - generic
+                - gke
+                - kind
+                type: string
+              podCertificate:
+                description: PodCertificate configures the podcertificate-controller.
+                properties:
+                  workersPerSigner:
+                    description: |-
+                      WorkersPerSigner is the number of concurrent workers per signer. Zero
+                      keeps the controller's default.
+                    format: int32
+                    minimum: 0
+                    type: integer
+                type: object
+              postgres:
+                description: |-
+                  Postgres configures ate-api-server's store. With neither
+                  connectionSecretName nor cloudSQL set, the operator deploys the
+                  bundled single-replica PostgreSQL.
+                properties:
+                  cloudSQL:
+                    description: |-
+                      CloudSQL adds the Cloud SQL Auth Proxy sidecar to ate-api-server.
+                      Without connectionSecretName, the operator connects through it with
+                      IAM database authentication and no password.
+                    properties:
+                      iamAuth:
+                        default: true
+                        description: IAMAuth turns on automatic IAM database authentication.
+                        type: boolean
+                      instance:
+                        description: Instance is the connection name, PROJECT:REGION:INSTANCE.
+                        minLength: 1
+                        type: string
+                      ipType:
+                        default: private
+                        description: IPType is how the proxy reaches the instance.
+                        enum:
+                        - private
+                        - public
+                        - psc
+                        type: string
+                      serviceAccount:
+                        description: |-
+                          ServiceAccount is the Google service account ate-api-server runs as
+                          through Workload Identity, and the IAM database user.
+                        type: string
+                    required:
+                    - instance
+                    type: object
+                  connectionSecretName:
+                    description: |-
+                      ConnectionSecretName names a Secret in ate-system holding an external
+                      database's connection strings: readWriteConnectionString, and
+                      optionally ownerConnectionString (defaults to the read-write one) and
+                      serverCA, a PEM for sslmode=verify-ca, mounted at
+                      /run/postgres-server-ca/server-ca.pem.
+                    type: string
+                  ownerRole:
+                    description: |-
+                      OwnerRole is the role that owns the schema and runs migrations.
+                      Defaults to substrate_owner.
+                    type: string
+                  poolMaxConns:
+                    description: PoolMaxConns caps ate-api-server's connection pool.
+                    type: string
+                  readWriteRole:
+                    description: |-
+                      ReadWriteRole is the role ate-api-server serves requests as.
+                      Defaults to substrate_readwrite.
+                    type: string
+                  schema:
+                    description: Schema ate-api-server keeps its tables in. Defaults
+                      to substrate.
+                    type: string
+                  storageClassName:
+                    description: |-
+                      StorageClassName is the bundled PostgreSQL volume's StorageClass.
+                      Changing it on an existing install needs the StatefulSet and its claim
+                      deleted first.
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: the bundled PostgreSQL uses fixed roles and schema; set
+                    schema and roles only for an external database
+                  rule: has(self.connectionSecretName) || has(self.cloudSQL) || (!has(self.schema)
+                    && !has(self.readWriteRole) && !has(self.ownerRole))
+              storage:
+                description: Storage configures where actor snapshots are stored.
+                properties:
+                  backend:
+                    description: Backend is the object store. Defaults to gcs on gke
+                      and s3 elsewhere.
+                    enum:
+                    - gcs
+                    - s3
+                    type: string
+                  s3:
+                    description: S3 configures the S3 backend.
+                    properties:
+                      credentialsSecretName:
+                        description: |-
+                          CredentialsSecretName names a Secret in ate-system holding
+                          AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY. Without it the plugin
+                          uses ambient credentials.
+                        type: string
+                      endpoint:
+                        description: Endpoint overrides the S3 endpoint, for S3-compatible
+                          stores.
+                        type: string
+                      region:
+                        description: Region is the bucket's region.
+                        minLength: 1
+                        type: string
+                      usePathStyle:
+                        description: UsePathStyle addresses buckets by path rather
+                          than by host.
+                        type: boolean
+                    required:
+                    - region
+                    type: object
+                  serviceAccountAnnotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      ServiceAccountAnnotations are set on the ate-api-server and atelet
+                      service accounts, whose objectstore plugins reach the bucket. Use it
+                      for workload identity, e.g. eks.amazonaws.com/role-arn.
+                    type: object
+                type: object
+            required:
+            - atenet
+            type: object
+            x-kubernetes-validations:
+            - message: kind always uses the bundled rustfs; leave storage unset
+              rule: self.platform != 'kind' || !has(self.storage)
+          status:
+            description: SubstrateInstallStatus is the observed state of the install.
+            properties:
+              conditions:
+                description: Conditions are Ready, Progressing, and Degraded.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: ObservedGeneration is the generation the status describes.
+                format: int64
+                type: integer
+              postgresSetupPodUID:
+                description: |-
+                  PostgresSetupPodUID is the bundled PostgreSQL pod the identity setup
+                  script last ran against.
+                type: string
+              step:
+                description: Step is the install step the operator last worked on.
+                type: string
+              version:
+                description: Version is the Substrate release the operator installs.
+                type: string
+            type: object
+        type: object
+        x-kubernetes-validations:
+        - message: the SubstrateInstall must be named substrate
+          rule: self.metadata.name == 'substrate'
+    served: true
+    storage: true
+    subresources:
+      status: {}

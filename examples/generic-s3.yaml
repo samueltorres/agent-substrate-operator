@@ -1,0 +1,25 @@
+# Any conformant cluster with the ClusterTrustBundle, ClusterTrustBundleProjection
+# and PodCertificateRequest feature gates and certificates.k8s.io/v1beta1 on.
+# Snapshots go to an S3 bucket; the bundled PostgreSQL holds the control plane
+# state.
+apiVersion: substrate.samueltorres.github.io/v1alpha1
+kind: SubstrateInstall
+metadata:
+  name: substrate
+spec:
+  platform: generic
+  storage:
+    backend: s3
+    s3:
+      region: eu-west-1
+      # A Secret in ate-system with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+      # Leave it out to use ambient credentials, e.g. IRSA:
+      credentialsSecretName: substrate-s3
+    # serviceAccountAnnotations:
+    #   eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/substrate
+  postgres:
+    storageClassName: gp3
+  atenet:
+    credentialProvider:
+      name: k8s.io
+  otlpEndpoint: http://otel-collector.observability.svc:4317

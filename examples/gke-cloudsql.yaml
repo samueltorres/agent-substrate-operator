@@ -1,0 +1,21 @@
+# GKE with snapshots in GCS and the store on Cloud SQL, reached through the
+# Cloud SQL Auth Proxy with IAM database authentication. Provision the
+# cluster, bucket, and IAM grants with upstream's tools/setup-gcp first.
+apiVersion: substrate.samueltorres.github.io/v1alpha1
+kind: SubstrateInstall
+metadata:
+  name: substrate
+spec:
+  platform: gke
+  gcp:
+    projectID: my-project
+    clusterLocation: europe-west4
+    clusterName: substrate
+  postgres:
+    cloudSQL:
+      instance: my-project:europe-west4:substrate
+      serviceAccount: ate-api-server@my-project.iam.gserviceaccount.com
+  atenet:
+    credentialProvider:
+      name: k8s.io
+  cordonControlPlane: true
