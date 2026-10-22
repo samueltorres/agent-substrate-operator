@@ -93,11 +93,11 @@ func secretValue(t *testing.T, obj *Object, key string) string {
 }
 
 func TestRenderEveryPlatform(t *testing.T) {
-	for _, platform := range []v1alpha1.Platform{v1alpha1.PlatformGeneric, v1alpha1.PlatformGKE, v1alpha1.PlatformKind} {
+	for _, platform := range []v1alpha1.Platform{v1alpha1.PlatformGeneric, v1alpha1.PlatformGKE, v1alpha1.PlatformEKS, v1alpha1.PlatformKind} {
 		t.Run(string(platform), func(t *testing.T) {
 			spec := baseSpec()
 			spec.Platform = platform
-			if platform != v1alpha1.PlatformGeneric {
+			if platform == v1alpha1.PlatformGKE || platform == v1alpha1.PlatformKind {
 				spec.Storage = v1alpha1.StorageSpec{}
 			}
 			b := mustRender(t, spec, nil)
@@ -164,6 +164,31 @@ func TestRenderStorage(t *testing.T) {
 		}
 		if !strings.Contains(toYAML(t, []*Object{mustFind(t, b.System, "DaemonSet", "atelet")}), "--image-credential-provider-config") {
 			t.Error("gke atelet lost the image credential provider")
+		}
+	})
+	t.Run("eks ecr", func(t *testing.T) {
+		spec := baseSpec()
+		spec.Platform = v1alpha1.PlatformEKS
+		b := mustRender(t, spec, nil)
+		atelet := mustFind(t, b.System, "DaemonSet", "atelet")
+		if got := env(container(t, atelet, "initContainers", "objectstore-plugin")); got["ATE_STORAGE_BACKEND"] != "s3" {
+			t.Errorf("objectstore env = %v", got)
+		}
+		if !strings.Contains(toYAML(t, []*Object{atelet}), "--image-credential-provider-config") {
+			t.Error("eks atelet lost the image credential provider")
+		}
+		volumes, _, _ := unstructured.NestedSlice(atelet.Object, append(append([]string{}, podSpecPath...), "volumes")...)
+		got := map[string]hostPath{}
+		for _, item := range volumes {
+			v := item.(map[string]any)
+			if hp, ok := v["hostPath"].(map[string]any); ok {
+				got[v["name"].(string)] = hostPath{hp["path"].(string), hp["type"].(string)}
+			}
+		}
+		for name, want := range eksImageCredentialProvider {
+			if got[name] != want {
+				t.Errorf("volume %s = %+v, want %+v", name, got[name], want)
+			}
 		}
 	})
 	t.Run("kind rustfs", func(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 const SingletonName = "substrate"
 
 // Platform selects the provider-specific parts of the install.
-// +kubebuilder:validation:Enum=generic;gke;kind
+// +kubebuilder:validation:Enum=generic;gke;eks;kind
 type Platform string
 
 const (
@@ -19,6 +19,9 @@ const (
 	// PlatformGKE keeps the GKE parts of the upstream manifests: the node's
 	// image credential provider, GCS, and Google Managed Prometheus.
 	PlatformGKE Platform = "gke"
+	// PlatformEKS points atelet at the ECR credential provider EKS installs
+	// on Amazon Linux 2023 nodes, so actor images pull from private ECR.
+	PlatformEKS Platform = "eks"
 	// PlatformKind is the upstream kind overlay: in-cluster rustfs for
 	// snapshots, an OpenTelemetry collector, Jaeger, and Prometheus.
 	PlatformKind Platform = "kind"

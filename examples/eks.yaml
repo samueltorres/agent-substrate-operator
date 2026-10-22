@@ -1,0 +1,27 @@
+# EKS 1.37 or later, which serves the PodCertificateRequest and
+# ClusterTrustBundle APIs by default, on Amazon Linux 2023 nodes. Snapshots go
+# to an S3 bucket through IRSA; the bundled PostgreSQL holds the control plane
+# state on an EBS volume (needs the EBS CSI driver add-on).
+#
+# atelet pulls actor images from private ECR with the node's
+# ecr-credential-provider. It runs under atelet's credentials: the role below
+# when IRSA is set, else the node role through the instance metadata service.
+# Either needs ECR pull permissions.
+apiVersion: substrate.samueltorres.github.io/v1alpha1
+kind: SubstrateInstall
+metadata:
+  name: substrate
+spec:
+  platform: eks
+  storage:
+    s3:
+      region: eu-west-1
+    # With EKS Pod Identity, drop this and associate the role with the
+    # ate-system/ate-api-server and ate-system/atelet service accounts.
+    serviceAccountAnnotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/substrate
+  postgres:
+    storageClassName: gp3
+  atenet:
+    credentialProvider:
+      name: k8s.io

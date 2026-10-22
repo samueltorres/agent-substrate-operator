@@ -34,10 +34,13 @@ deleted.
 
 ## Prerequisites
 
-- Kubernetes 1.36 or later, with the `ClusterTrustBundle`,
-  `ClusterTrustBundleProjection` and `PodCertificateRequest` feature gates on,
-  and `certificates.k8s.io/v1beta1` served. On GKE these can only be enabled
-  when the cluster is created (see upstream's `tools/setup-gcp`).
+- Kubernetes 1.37 or later, which serves the ClusterTrustBundle and
+  PodCertificateRequest APIs by default. 1.36 also works with the
+  `ClusterTrustBundle`, `ClusterTrustBundleProjection` and
+  `PodCertificateRequest` feature gates on and `certificates.k8s.io/v1beta1`
+  served. On GKE these can only be enabled when the cluster is created (see
+  upstream's `tools/setup-gcp`). EKS does not expose feature gates, so it
+  needs 1.37.
 - The Agent Substrate images. Upstream publishes none, so this project's CI
   rebuilds each embedded release from its upstream tag and publishes it,
   signed, to `ghcr.io/samueltorres/substrate`. The operator uses those by
@@ -86,11 +89,11 @@ helm uninstall substrate-operator -n substrate-operator
 The resource must be named `substrate`, because the upstream manifests name
 `ate-system` literally, so a cluster holds one install. Field names follow
 upstream's `install.ate.dev/v1alpha1` install document where one exists. See
-[`examples/`](examples) for kind, generic S3, and GKE with Cloud SQL.
+[`examples/`](examples) for kind, generic S3, EKS, and GKE with Cloud SQL.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `platform` | `generic` | `generic`: any cluster; drops atelet's GKE-only image credential provider mounts. `gke`: keeps them, and adds Google Managed Prometheus monitoring. `kind`: upstream's kind overlay with rustfs, an OpenTelemetry collector, Jaeger and Prometheus. |
+| `platform` | `generic` | `generic`: any cluster; drops atelet's GKE-only image credential provider mounts. `gke`: keeps them, and adds Google Managed Prometheus monitoring. `eks`: points them at the ECR credential provider in `/etc/eks/image-credential-provider` on Amazon Linux 2023 nodes, so actor images pull from private ECR; atelet's pods do not start on nodes without it, such as Bottlerocket, which need `generic`. `kind`: upstream's kind overlay with rustfs, an OpenTelemetry collector, Jaeger and Prometheus. |
 | `images.repository` | `ghcr.io/samueltorres/substrate` | Registry path holding the component images. |
 | `images.tag` | embedded release | Tag of every component image. |
 | `storage.backend` | `gcs` on gke, else `s3` | Where actor snapshots go. Leave `storage` unset on kind. |
