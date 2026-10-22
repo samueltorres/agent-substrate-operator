@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Fails unless a release tag matches the chart version. The chart defaults the
-# operator image to its version, so a mismatched tag would publish an image the
-# chart never installs. CI runs this first on a tag, before publishing anything.
+# Fails unless a release tag is v followed by a semantic version. The release
+# packages the chart with that version, and the chart defaults the operator
+# image to it, so a tag Helm would reject must fail before anything is
+# published. CI runs this first on a tag.
 #
 #   hack/check-release-tag.sh v0.0.1
 
@@ -13,9 +14,8 @@ if [[ $# -ne 1 ]]; then
 fi
 tag="$1"
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-version="$(sed -n 's/^version: *//p' "${root}/charts/agent-substrate-operator/Chart.yaml")"
-if [[ "${tag}" != "v${version}" ]]; then
-  echo "tag ${tag} does not match the chart version ${version}; set version in charts/agent-substrate-operator/Chart.yaml and tag v${version}" >&2
+semver='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+if [[ ! "${tag}" =~ ${semver} ]]; then
+  echo "tag ${tag} is not v followed by a semantic version, e.g. v0.0.1" >&2
   exit 1
 fi

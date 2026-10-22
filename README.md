@@ -154,11 +154,11 @@ cosign verify ghcr.io/samueltorres/agent-substrate-operator:0.0.1 \
 
 ### Cutting a release
 
-1. Set `version` in `charts/agent-substrate-operator/Chart.yaml`. The chart
-   defaults the operator image to that version.
-2. Tag and push: `git tag v0.0.1 && git push origin v0.0.1`. CI tests,
-   publishes the image and chart, and creates the GitHub release. It refuses
-   a tag that does not match the chart version.
+Tag and push: `git tag v0.0.1 && git push origin v0.0.1`. CI tests, publishes
+the image and chart, and creates the GitHub release. The tag sets the chart
+version, and the chart defaults the operator image to that version, so the two
+always match. `Chart.yaml` keeps `0.0.0` in the repository; when installing
+the chart from a checkout, set `image.tag`.
 
 ### CI
 
