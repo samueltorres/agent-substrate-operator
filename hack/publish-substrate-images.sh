@@ -36,9 +36,11 @@ out="$(mktemp)"
 kubeconfig="$(mktemp)"
 trap 'rm -rf "${src}" "${out}" "${kubeconfig}"' EXIT
 
-# A clean tree at the release tag, so local changes in the checkout cannot
-# reach the images.
-git -C "${upstream}" archive "${version}" | tar -x -C "${src}"
+# A clean clone at the release tag, so local changes in the checkout cannot
+# reach the images. It has to be a clone: ate-setup labels the images with the
+# commit HEAD names.
+git -c advice.detachedHead=false clone --quiet --depth 1 --branch "${version}" \
+  "file://${upstream}" "${src}"
 
 # ate-setup loads a kubeconfig for every command, though publishing never
 # talks to a cluster. This one names no reachable cluster, so the publish

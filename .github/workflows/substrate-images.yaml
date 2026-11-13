@@ -9,7 +9,7 @@ name: substrate-images
 on:
   push:
     branches: [main]
-    paths: [internal/upstream/files/VERSION]
+    paths: [internal/upstream/files/VERSION, hack/publish-substrate-images.sh]
   workflow_dispatch:
 
 permissions:
