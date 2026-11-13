@@ -14,6 +14,7 @@ metadata:
 spec:
   platform: eks
   storage:
+    snapshotLocation: s3://substrate-snapshots/
     s3:
       region: eu-west-1
     # With EKS Pod Identity, drop this and associate the role with the

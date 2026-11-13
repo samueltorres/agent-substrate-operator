@@ -34,7 +34,9 @@ func (r *Reconciler) ensureControlPlaneSecrets(ctx context.Context, jwtAlgorithm
 	}); err != nil {
 		return err
 	}
-	if err := r.ensureCAPool(ctx, render.Namespace, secretActorIDCAPool, pki.KeyTypeED25519); err != nil {
+	// ECDSA: external relying parties trust this root, and P-256 is more
+	// broadly accepted than Ed25519.
+	if err := r.ensureCAPool(ctx, render.Namespace, secretActorIDCAPool, pki.KeyTypeECDSAP256); err != nil {
 		return err
 	}
 	// The egress gateway verifies actor client certificates, so it needs the

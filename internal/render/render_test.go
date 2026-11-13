@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,10 +20,19 @@ func baseSpec() v1alpha1.SubstrateInstallSpec {
 		Platform: v1alpha1.PlatformGeneric,
 		Images:   v1alpha1.ImagesSpec{Repository: "registry.example.com/substrate"},
 		Storage: v1alpha1.StorageSpec{
+			SnapshotLocation:          "s3://substrate-snapshots/prod/",
 			S3:                        &v1alpha1.S3Spec{Region: "eu-west-1", Endpoint: "https://s3.example.com", UsePathStyle: true, CredentialsSecretName: "s3-creds"},
 			ServiceAccountAnnotations: map[string]string{"eks.amazonaws.com/role-arn": "arn:aws:iam::1:role/substrate"},
 		},
 		Atenet: v1alpha1.AtenetSpec{CredentialProvider: v1alpha1.CredentialProviderSpec{Name: "k8s.io"}},
+	}
+}
+
+// gcsStorage is GKE's default storage, with what it needs set.
+func gcsStorage() v1alpha1.StorageSpec {
+	return v1alpha1.StorageSpec{
+		SnapshotLocation:       "gs://substrate-snapshots/",
+		TransferServiceAccount: "ate-snapshot-transfer@p.iam.gserviceaccount.com",
 	}
 }
 
@@ -97,7 +107,10 @@ func TestRenderEveryPlatform(t *testing.T) {
 		t.Run(string(platform), func(t *testing.T) {
 			spec := baseSpec()
 			spec.Platform = platform
-			if platform == v1alpha1.PlatformGKE || platform == v1alpha1.PlatformKind {
+			switch platform {
+			case v1alpha1.PlatformGKE:
+				spec.Storage = gcsStorage()
+			case v1alpha1.PlatformKind:
 				spec.Storage = v1alpha1.StorageSpec{}
 			}
 			b := mustRender(t, spec, nil)
@@ -117,7 +130,7 @@ func TestRenderEveryPlatform(t *testing.T) {
 					t.Errorf("%s has no install label", describe(obj))
 				}
 			}
-			for _, name := range []string{"ate-api-server", "ate-controller", "atenet-router", "atenet-egress", "k8s-credential-provider"} {
+			for _, name := range []string{"ate-api-server", "ate-idp-server", "ate-controller", "atenet-router", "atenet-egress", "k8s-credential-provider"} {
 				mustFind(t, b.System, "Deployment", name)
 			}
 			mustFind(t, b.System, "DaemonSet", "atelet")
@@ -156,7 +169,7 @@ func TestRenderStorage(t *testing.T) {
 	t.Run("gke gcs", func(t *testing.T) {
 		spec := baseSpec()
 		spec.Platform = v1alpha1.PlatformGKE
-		spec.Storage = v1alpha1.StorageSpec{}
+		spec.Storage = gcsStorage()
 		b := mustRender(t, spec, nil)
 		c := container(t, mustFind(t, b.System, "DaemonSet", "atelet"), "initContainers", "objectstore-plugin")
 		if got := env(c); got["ATE_STORAGE_BACKEND"] != "gcs" || got["AWS_REGION"] != "" {
@@ -255,7 +268,7 @@ func TestRenderPostgres(t *testing.T) {
 	t.Run("cloud sql", func(t *testing.T) {
 		spec := baseSpec()
 		spec.Platform = v1alpha1.PlatformGKE
-		spec.Storage = v1alpha1.StorageSpec{}
+		spec.Storage = gcsStorage()
 		spec.Postgres = v1alpha1.PostgresSpec{CloudSQL: &v1alpha1.CloudSQLSpec{
 			Instance: "p:r:i", ServiceAccount: "ateapi@p.iam.gserviceaccount.com",
 		}}
@@ -280,7 +293,7 @@ func TestRenderPostgres(t *testing.T) {
 func TestRenderSize10AndCordon(t *testing.T) {
 	spec := baseSpec()
 	spec.ClusterSize = v1alpha1.ClusterSize10
-	spec.CordonControlPlane = true
+	spec.CordonSystemInfraComponents = true
 	spec.PodCertificate.WorkersPerSigner = 4
 	b := mustRender(t, spec, nil)
 
@@ -306,8 +319,8 @@ func TestRenderSize10AndCordon(t *testing.T) {
 				continue
 			}
 			sel, _, _ := unstructured.NestedString(obj.Object, "spec", "template", "spec", "nodeSelector", "ate.dev/workloadType")
-			if sel != "ate-control-plane" {
-				t.Errorf("%s is not pinned to the control plane pool", describe(obj))
+			if sel != "ate-system-infra" {
+				t.Errorf("%s is not pinned to the system infra pool", describe(obj))
 			}
 		}
 	}
@@ -403,7 +416,9 @@ func TestActorJWTIssuerDefault(t *testing.T) {
 
 func TestAuthenticationConfig(t *testing.T) {
 	in := authenticationConfig(InClusterIssuer)
-	if !strings.Contains(in, "discoveryTokenFile") || !strings.HasPrefix(in, "actorIdentityJWTProvider: kubernetes\n") {
+	// ate-api-server parses the file strictly, and 0.x's
+	// actorIdentityJWTProvider is no longer a field.
+	if !strings.Contains(in, "discoveryTokenFile") || !strings.HasPrefix(in, "jwtProviders:\n") {
 		t.Errorf("in-cluster config = %q", in)
 	}
 	gke := authenticationConfig(GKEIssuer(&v1alpha1.GCPSpec{ProjectID: "p", ClusterLocation: "l", ClusterName: "c"}))
@@ -428,6 +443,114 @@ func TestExamplesRender(t *testing.T) {
 				t.Fatal(err)
 			}
 			mustRender(t, install.Spec, nil)
+		})
+	}
+}
+
+func args(c map[string]any) []string {
+	var out []string
+	list, _ := c["args"].([]any)
+	for _, a := range list {
+		out = append(out, a.(string))
+	}
+	return out
+}
+
+func TestRenderSystemFlags(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		b := mustRender(t, baseSpec(), nil)
+		api := args(container(t, mustFind(t, b.System, "Deployment", "ate-api-server"), "containers", "ate-api-server"))
+		if !slices.Contains(api, "--authz-bootstrap-owners="+DefaultAuthzBootstrapOwner) {
+			t.Errorf("ate-api-server args = %v, want the default bootstrap owner", api)
+		}
+		if slices.ContainsFunc(api, func(a string) bool { return strings.HasPrefix(a, "--egress-gateway-spiffe-id") }) {
+			t.Errorf("ate-api-server args = %v, want ate-api-server's own egress gateway default", api)
+		}
+		idp := args(container(t, mustFind(t, b.System, "Deployment", "ate-idp-server"), "containers", "ate-idp-server"))
+		if !slices.Contains(idp, "--issuer="+DefaultActorJWTIssuer) {
+			t.Errorf("ate-idp-server args = %v", idp)
+		}
+		router := args(container(t, mustFind(t, b.System, "Deployment", "atenet-router"), "containers", "atenet-router"))
+		if slices.ContainsFunc(router, func(a string) bool { return strings.HasPrefix(a, "--ingress-allowed-spiffe-ids") }) {
+			t.Errorf("router args = %v, want no allowlist", router)
+		}
+	})
+	t.Run("set", func(t *testing.T) {
+		spec := baseSpec()
+		spec.APIServer.AuthzBootstrapOwners = []string{"user:a", "user:b"}
+		spec.APIServer.EgressGatewayExtraSPIFFEIDs = []string{"spiffe://cluster.local/ns/p/sa/p"}
+		spec.ActorJWT.Issuer = "https://idp.example.com"
+		spec.Atenet.IngressAllowedSPIFFEIDs = []string{"spiffe://cluster.local/ns/a/sa/a", "spiffe://cluster.local/ns/b/sa/b"}
+		b := mustRender(t, spec, nil)
+		api := args(container(t, mustFind(t, b.System, "Deployment", "ate-api-server"), "containers", "ate-api-server"))
+		for _, want := range []string{
+			"--authz-bootstrap-owners=user:a,user:b",
+			"--egress-gateway-spiffe-id=" + egressSPIFFEID,
+			"--egress-gateway-spiffe-id=spiffe://cluster.local/ns/p/sa/p",
+		} {
+			if !slices.Contains(api, want) {
+				t.Errorf("ate-api-server args = %v, want %s", api, want)
+			}
+		}
+		idp := args(container(t, mustFind(t, b.System, "Deployment", "ate-idp-server"), "containers", "ate-idp-server"))
+		if !slices.Contains(idp, "--issuer=https://idp.example.com") {
+			t.Errorf("ate-idp-server args = %v", idp)
+		}
+		router := args(container(t, mustFind(t, b.System, "Deployment", "atenet-router"), "containers", "atenet-router"))
+		if !slices.Contains(router, "--ingress-allowed-spiffe-ids=spiffe://cluster.local/ns/a/sa/a,spiffe://cluster.local/ns/b/sa/b") {
+			t.Errorf("router args = %v", router)
+		}
+	})
+}
+
+func TestRenderAPIServerConfig(t *testing.T) {
+	spec := baseSpec()
+	spec.APIServer.LogLevel = "debug"
+	b := mustRender(t, spec, nil)
+	cm := mustFind(t, b.System, "ConfigMap", configMapAPIEnvVars)
+	if v, _, _ := unstructured.NestedString(cm.Object, "data", "ATE_API_SNAPSHOT_LOCATION"); v != "s3://substrate-snapshots/prod/" {
+		t.Errorf("ATE_API_SNAPSHOT_LOCATION = %q", v)
+	}
+	if _, ok, _ := unstructured.NestedString(cm.Object, "data", "ATE_API_SNAPSHOT_TRANSFER_SERVICE_ACCOUNT"); !ok {
+		t.Error("ATE_API_SNAPSHOT_TRANSFER_SERVICE_ACCOUNT is missing; the sidecar would see the literal $(...)")
+	}
+	config := mustFind(t, b.System, "ConfigMap", configMapAPIConfig)
+	if v, _, _ := unstructured.NestedString(config.Object, "data", "apiconfig.textproto"); !strings.Contains(v, `level: "debug"`) {
+		t.Errorf("apiconfig.textproto = %q", v)
+	}
+
+	kind := baseSpec()
+	kind.Platform = v1alpha1.PlatformKind
+	kind.Storage = v1alpha1.StorageSpec{}
+	cm = mustFind(t, mustRender(t, kind, nil).System, "ConfigMap", configMapAPIEnvVars)
+	if v, _, _ := unstructured.NestedString(cm.Object, "data", "ATE_API_SNAPSHOT_LOCATION"); v != KindSnapshotLocation {
+		t.Errorf("kind ATE_API_SNAPSHOT_LOCATION = %q", v)
+	}
+}
+
+func TestRenderRejectsStorage(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*v1alpha1.StorageSpec)
+		want   string
+	}{
+		{"no location", func(s *v1alpha1.StorageSpec) { s.SnapshotLocation = "" }, "snapshotLocation is required"},
+		{"no bucket", func(s *v1alpha1.StorageSpec) { s.SnapshotLocation = "s3:///prefix" }, "SCHEME://BUCKET"},
+		{"query", func(s *v1alpha1.StorageSpec) { s.SnapshotLocation = "s3://b/p?x=1" }, "SCHEME://BUCKET"},
+		{"dot segment", func(s *v1alpha1.StorageSpec) { s.SnapshotLocation = "s3://b/../p/" }, "path segment"},
+		{"atespaces", func(s *v1alpha1.StorageSpec) { s.SnapshotLocation = "s3://b/atespaces/" }, "atespaces"},
+		{"gcs without transfer account", func(s *v1alpha1.StorageSpec) {
+			s.Backend = v1alpha1.StorageBackendGCS
+			s.S3 = nil
+		}, "transferServiceAccount"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := baseSpec()
+			tc.mutate(&spec.Storage)
+			_, err := Render(Inputs{Spec: WithDefaults(spec), Issuer: InClusterIssuer})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Render error = %v, want one containing %q", err, tc.want)
+			}
 		})
 	}
 }

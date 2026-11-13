@@ -89,12 +89,39 @@ spec:
                       installs that trust more JWT providers. See upstream
                       docs/authentication.md.
                     type: string
+                  authzBootstrapOwners:
+                    description: |-
+                      AuthzBootstrapOwners are the principals that always hold owner on
+                      global:root. Defaults to kubectl-ate's service account,
+                      system:serviceaccount:ate-system:ate-client, which makes anyone who
+                      can mint its token a global owner; set your operators' own principals
+                      for a shared install.
+                    items:
+                      type: string
+                    type: array
+                  egressGatewayExtraSPIFFEIDs:
+                    description: |-
+                      EgressGatewayExtraSPIFFEIDs hold ate-api-server's egress_gateway role
+                      next to atenet-egress, such as a credential provider that mints actor
+                      JWTs. The role also reads actors and mints actor certificates.
+                    items:
+                      type: string
+                    type: array
                   expectedJWTIssuer:
                     description: |-
                       ExpectedJWTIssuer is the service account token issuer ate-api-server
                       trusts. Defaults to the GKE issuer when gcp is set, then to the
                       cluster's OpenID discovery document, then to
                       https://kubernetes.default.svc.
+                    type: string
+                  logLevel:
+                    default: info
+                    description: LogLevel is ate-api-server's log level.
+                    enum:
+                    - debug
+                    - info
+                    - warn
+                    - error
                     type: string
                 type: object
               atenet:
@@ -130,6 +157,15 @@ spec:
                         && !has(self.address)) : has(self.name)'
                     - message: a provider other than k8s.io needs an address
                       rule: '!has(self.name) || self.name == ''k8s.io'' || has(self.address)'
+                  ingressAllowedSPIFFEIDs:
+                    description: |-
+                      IngressAllowedSPIFFEIDs are the SPIFFE IDs of the clients the ingress
+                      router lets reach actors; any listed client may reach any actor. Unset,
+                      no client may. The podidentity signer issues
+                      spiffe://cluster.local/ns/<namespace>/sa/<service-account>.
+                    items:
+                      type: string
+                    type: array
                 required:
                 - credentialProvider
                 type: object
@@ -140,11 +176,11 @@ spec:
                 - size0
                 - size10
                 type: string
-              cordonControlPlane:
+              cordonSystemInfraComponents:
                 description: |-
-                  CordonControlPlane keeps the control plane off the worker nodes. It
-                  assumes a pool labeled and tainted
-                  ate.dev/workloadType=ate-control-plane:NoSchedule, and a one-node pool
+                  CordonSystemInfraComponents keeps the system infra components off the
+                  worker nodes. It assumes a pool labeled and tainted
+                  ate.dev/workloadType=ate-system-infra:NoSchedule, and a one-node pool
                   labeled and tainted ate.dev/workloadType=ate-postgres:NoSchedule.
                 type: boolean
               deletionPolicy:
@@ -332,6 +368,20 @@ spec:
                       service accounts, whose objectstore plugins reach the bucket. Use it
                       for workload identity, e.g. eks.amazonaws.com/role-arn.
                     type: object
+                  snapshotLocation:
+                    description: |-
+                      SnapshotLocation is the object-storage URI actor snapshots are stored
+                      under, e.g. gs://BUCKET/PREFIX/ or s3://BUCKET/PREFIX/. Required except
+                      on kind, which uses gs://ate-snapshots/ in its bundled rustfs.
+                    pattern: ^[a-z0-9]*://[^/?#]+(/[A-Za-z0-9_/-]*)?$
+                    type: string
+                  transferServiceAccount:
+                    description: |-
+                      TransferServiceAccount is the email of the Google service account
+                      snapshot transfers run as, which ate-api-server's credential exchange
+                      impersonates to hand atelet tokens scoped to one actor. Required with
+                      the gcs backend; unused with s3.
+                    type: string
                 type: object
             required:
             - atenet
@@ -339,6 +389,8 @@ spec:
             x-kubernetes-validations:
             - message: kind always uses the bundled rustfs; leave storage unset
               rule: self.platform != 'kind' || !has(self.storage)
+            - message: storage.snapshotLocation is required except on kind
+              rule: self.platform == 'kind' || (has(self.storage) && has(self.storage.snapshotLocation))
           status:
             description: SubstrateInstallStatus is the observed state of the install.
             properties:

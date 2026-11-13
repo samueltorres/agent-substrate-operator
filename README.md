@@ -9,7 +9,9 @@ The operator applies the upstream manifests in the order upstream's installer
 in the resource's status. It keeps the install in that state afterwards.
 
 Each operator release embeds one Agent Substrate release. This one installs
-**v0.5.0**.
+**v1.0.0**.
+
+Upstream does not support upgrading a 0.x install to 1.0; reinstall instead.
 
 ## What the operator does
 
@@ -23,7 +25,7 @@ work as a reconcile loop:
 | `PodCertificate` | Creates the signer CA pools and the podcertificate-controller, and waits for its ClusterTrustBundles. |
 | `SandboxConfig` | Applies the SandboxConfig admission policy and the default gVisor SandboxConfig. |
 | `Postgres` | Applies the bundled PostgreSQL. Once it is ready, runs upstream's identity setup script in the pod. |
-| `ControlPlane` | Applies ate-api-server, ate-controller, atelet, atenet router and egress, the credential provider, and their configuration. |
+| `ControlPlane` | Applies ate-api-server, ate-idp-server, ate-controller, atelet, atenet router and egress, the credential provider, and their configuration. |
 | `Prune` | Deletes objects an earlier spec installed that the current one no longer renders. |
 | `Rollout` | Waits until every workload has rolled out, then sets `Ready`. |
 
@@ -97,6 +99,8 @@ upstream's `install.ate.dev/v1alpha1` install document where one exists. See
 | `images.repository` | `ghcr.io/samueltorres/substrate` | Registry path holding the component images. |
 | `images.tag` | embedded release | Tag of every component image. |
 | `storage.backend` | `gcs` on gke, else `s3` | Where actor snapshots go. Leave `storage` unset on kind. |
+| `storage.snapshotLocation` | required; `gs://ate-snapshots/` on kind | Object-storage URI snapshots are stored under, e.g. `s3://BUCKET/PREFIX/`. |
+| `storage.transferServiceAccount` | | Email of the Google service account snapshot transfers run as. Required with `gcs`: ate-api-server's credential exchange impersonates it to hand atelet tokens scoped to one actor. |
 | `storage.s3` | | `region`, `endpoint`, `usePathStyle`, and `credentialsSecretName` (a Secret in `ate-system` with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`). |
 | `storage.serviceAccountAnnotations` | | Set on the ate-api-server and atelet service accounts, for workload identity. |
 | `postgres.connectionSecretName` | | Use an external database. Names a Secret in `ate-system` with `readWriteConnectionString`, and optionally `ownerConnectionString` and `serverCA`. |
@@ -105,14 +109,18 @@ upstream's `install.ate.dev/v1alpha1` install document where one exists. See
 | `postgres.storageClassName` | cluster default | StorageClass of the bundled PostgreSQL volume. |
 | `atenet.credentialProvider` | required | `{name: k8s.io}` deploys the bundled Kubernetes Secrets provider. `{enabled: false}` turns credential injection off. `{name, address}` points at a provider you deploy. |
 | `atenet.additionalEgressExtprocService` | | `NAMESPACE/SERVICE:PORT` of an ext_proc authorization filter for the egress gateway. |
+| `atenet.ingressAllowedSPIFFEIDs` | none | SPIFFE IDs of the clients the ingress router lets reach actors. Unset, no client may. `kubectl ate proxy` dials as `spiffe://cluster.local/ns/ate-system/sa/atenet-client`. |
 | `apiServer.expectedJWTIssuer` | discovered | Service account token issuer ate-api-server trusts. Without it the operator derives the issuer from `gcp`, else reads the cluster's OpenID discovery document, else uses `https://kubernetes.default.svc`. |
 | `apiServer.authenticationConfig` | generated | Replaces `authentication.yaml`, for installs that trust more JWT providers. |
+| `apiServer.logLevel` | `info` | `debug`, `info`, `warn` or `error`. |
+| `apiServer.authzBootstrapOwners` | `system:serviceaccount:ate-system:ate-client` | Principals that always hold owner on `global:root`. The default makes anyone who can mint a token for kubectl-ate's service account a global owner; set your operators' principals for a shared install. |
+| `apiServer.egressGatewayExtraSPIFFEIDs` | | SPIFFE IDs that hold ate-api-server's egress_gateway role next to atenet-egress, such as a credential provider that mints actor JWTs. |
 | `actorJWT.algorithm` | `ES256` | Signing algorithm of the actor identity JWT pool. It only applies when the pool is first created. |
 | `actorJWT.issuer` | `https://idp.ate-system.svc` | `iss` claim of actor JWTs. Must be https, with no query or fragment. |
 | `gcp` | | `projectID`, `clusterLocation`, `clusterName` of a GKE cluster. |
 | `otlpEndpoint` | platform's | Where control plane telemetry goes. |
 | `clusterSize` | `size0` | `size10` resizes the bundled PostgreSQL for a dedicated node and raises the podcertificate-controller's API rate limits. |
-| `cordonControlPlane` | `false` | Pin the control plane to nodes labeled and tainted `ate.dev/workloadType=ate-control-plane`, and PostgreSQL to `ate.dev/workloadType=ate-postgres`. |
+| `cordonSystemInfraComponents` | `false` | Pin the system infra components to nodes labeled and tainted `ate.dev/workloadType=ate-system-infra`, and PostgreSQL to `ate.dev/workloadType=ate-postgres`. |
 | `podCertificate.workersPerSigner` | controller's | Concurrent workers per signer. |
 | `deletionPolicy` | `Retain` | What deleting the `SubstrateInstall` does. `Retain` leaves everything in place. `Delete` tears the install down as `ate-setup delete ate-system` does: the CRDs (so every WorkerPool), the namespaces (so the bundled PostgreSQL data and the key pools), and the trust bundles. |
 
@@ -123,7 +131,7 @@ Only the Envoy dataplane is supported. agentgateway is not yet.
 ```console
 $ kubectl get substrateinstall
 NAME        VERSION   READY   STEP       AGE
-substrate   v0.5.0    True    Ready      6m
+substrate   v1.0.0    True    Ready      6m
 ```
 
 While it works, `status.step` names the step and the `Progressing` condition
@@ -138,7 +146,7 @@ CI publishes everything to ghcr, signed with cosign keyless signing:
 |---|---|---|
 | Operator image | `ghcr.io/samueltorres/agent-substrate-operator` | `X.Y.Z` per release, `main` and `sha-…` per push to main |
 | Helm chart | `oci://ghcr.io/samueltorres/charts/agent-substrate-operator` | `X.Y.Z` per release |
-| Substrate images | `ghcr.io/samueltorres/substrate/<component>` | the upstream release, e.g. `v0.5.0` |
+| Substrate images | `ghcr.io/samueltorres/substrate/<component>` | the upstream release, e.g. `v1.0.0` |
 
 The Substrate images are not official upstream builds. They are rebuilds of
 the upstream release tag, made by upstream's own `ate-setup publish

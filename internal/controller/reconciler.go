@@ -54,7 +54,7 @@ type Reconciler struct {
 
 // +kubebuilder:rbac:groups=substrate.samueltorres.github.io,resources=substrateinstalls,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=substrate.samueltorres.github.io,resources=substrateinstalls/status;substrateinstalls/finalizers,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=namespaces;configmaps;secrets;services;serviceaccounts;persistentvolumeclaims,verbs=*
+// +kubebuilder:rbac:groups="",resources=namespaces;configmaps;secrets;services;serviceaccounts;persistentvolumeclaims;resourcequotas,verbs=*
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=pods/exec,verbs=get;create
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
@@ -62,7 +62,6 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=*
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=*
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=*
-// +kubebuilder:rbac:groups=scheduling.k8s.io,resources=priorityclasses,verbs=*
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings;roles;rolebindings,verbs=*
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingadmissionpolicies;validatingadmissionpolicybindings,verbs=*
 // +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=*

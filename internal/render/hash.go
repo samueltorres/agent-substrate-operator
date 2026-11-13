@@ -81,6 +81,13 @@ func configRefs(obj *Object) ([]string, error) {
 				add("ConfigMap", s["configMapRef"], "name")
 				add("Secret", s["secretRef"], "name")
 			}
+			env, _ := cm["env"].([]any)
+			for _, e := range env {
+				em, _ := e.(map[string]any)
+				valueFrom, _ := em["valueFrom"].(map[string]any)
+				add("ConfigMap", valueFrom["configMapKeyRef"], "name")
+				add("Secret", valueFrom["secretKeyRef"], "name")
+			}
 		}
 	}
 	volumes, _ := podSpec["volumes"].([]any)

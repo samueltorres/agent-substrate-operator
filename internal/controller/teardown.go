@@ -87,7 +87,7 @@ func (r *Reconciler) prune(ctx context.Context, desired []*render.Object) error 
 }
 
 // sandboxConfigFinalizer is the WorkerPool protection finalizer atecontroller
-// keeps on SandboxConfigs (upstream pkg/api/v1alpha1).
+// keeps on SandboxConfigs (upstream api/infra/k8s/ate/v1).
 const sandboxConfigFinalizer = "sandboxconfig.ate.dev/workerpool-protection"
 
 // substrateTrustBundles maps each ClusterTrustBundle Substrate publishes to
@@ -212,7 +212,7 @@ func (r *Reconciler) gone(ctx context.Context, obj *unstructured.Unstructured) (
 	return describe(obj) + " still deleting", nil
 }
 
-var sandboxConfigGVK = schema.GroupVersionKind{Group: "ate.dev", Version: "v1alpha1", Kind: "SandboxConfig"}
+var sandboxConfigGVK = schema.GroupVersionKind{Group: "ate.dev", Version: "v1", Kind: "SandboxConfig"}
 
 func (r *Reconciler) releaseSandboxConfigs(ctx context.Context) error {
 	list := &unstructured.UnstructuredList{}

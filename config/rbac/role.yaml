@@ -14,6 +14,7 @@ rules:
   - configmaps
   - namespaces
   - persistentvolumeclaims
+  - resourcequotas
   - secrets
   - serviceaccounts
   - services
@@ -110,12 +111,6 @@ rules:
   - clusterroles
   - rolebindings
   - roles
-  verbs:
-  - '*'
-- apiGroups:
-  - scheduling.k8s.io
-  resources:
-  - priorityclasses
   verbs:
   - '*'
 - apiGroups:

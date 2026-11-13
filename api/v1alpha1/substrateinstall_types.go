@@ -66,6 +66,7 @@ const (
 // where one exists.
 //
 // +kubebuilder:validation:XValidation:rule="self.platform != 'kind' || !has(self.storage)",message="kind always uses the bundled rustfs; leave storage unset"
+// +kubebuilder:validation:XValidation:rule="self.platform == 'kind' || (has(self.storage) && has(self.storage.snapshotLocation))",message="storage.snapshotLocation is required except on kind"
 type SubstrateInstallSpec struct {
 	// Platform selects the provider-specific parts of the install.
 	// +kubebuilder:default=generic
@@ -112,12 +113,12 @@ type SubstrateInstallSpec struct {
 	// +optional
 	ClusterSize ClusterSize `json:"clusterSize,omitempty"`
 
-	// CordonControlPlane keeps the control plane off the worker nodes. It
-	// assumes a pool labeled and tainted
-	// ate.dev/workloadType=ate-control-plane:NoSchedule, and a one-node pool
+	// CordonSystemInfraComponents keeps the system infra components off the
+	// worker nodes. It assumes a pool labeled and tainted
+	// ate.dev/workloadType=ate-system-infra:NoSchedule, and a one-node pool
 	// labeled and tainted ate.dev/workloadType=ate-postgres:NoSchedule.
 	// +optional
-	CordonControlPlane bool `json:"cordonControlPlane,omitempty"`
+	CordonSystemInfraComponents bool `json:"cordonSystemInfraComponents,omitempty"`
 
 	// PodCertificate configures the podcertificate-controller.
 	// +optional
@@ -150,6 +151,20 @@ type StorageSpec struct {
 	// Backend is the object store. Defaults to gcs on gke and s3 elsewhere.
 	// +optional
 	Backend StorageBackend `json:"backend,omitempty"`
+
+	// SnapshotLocation is the object-storage URI actor snapshots are stored
+	// under, e.g. gs://BUCKET/PREFIX/ or s3://BUCKET/PREFIX/. Required except
+	// on kind, which uses gs://ate-snapshots/ in its bundled rustfs.
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]*://[^/?#]+(/[A-Za-z0-9_/-]*)?$`
+	// +optional
+	SnapshotLocation string `json:"snapshotLocation,omitempty"`
+
+	// TransferServiceAccount is the email of the Google service account
+	// snapshot transfers run as, which ate-api-server's credential exchange
+	// impersonates to hand atelet tokens scoped to one actor. Required with
+	// the gcs backend; unused with s3.
+	// +optional
+	TransferServiceAccount string `json:"transferServiceAccount,omitempty"`
 
 	// S3 configures the S3 backend.
 	// +optional
@@ -264,6 +279,13 @@ type AtenetSpec struct {
 	// +kubebuilder:validation:Pattern=`^[a-z0-9-]+/[a-z0-9-]+:[0-9]+$`
 	// +optional
 	AdditionalEgressExtprocService string `json:"additionalEgressExtprocService,omitempty"`
+
+	// IngressAllowedSPIFFEIDs are the SPIFFE IDs of the clients the ingress
+	// router lets reach actors; any listed client may reach any actor. Unset,
+	// no client may. The podidentity signer issues
+	// spiffe://cluster.local/ns/<namespace>/sa/<service-account>.
+	// +optional
+	IngressAllowedSPIFFEIDs []string `json:"ingressAllowedSPIFFEIDs,omitempty"`
 }
 
 // CredentialProviderSpec is upstream's --credential-provider: name k8s.io
@@ -301,6 +323,26 @@ type APIServerSpec struct {
 	// docs/authentication.md.
 	// +optional
 	AuthenticationConfig string `json:"authenticationConfig,omitempty"`
+
+	// LogLevel is ate-api-server's log level.
+	// +kubebuilder:validation:Enum=debug;info;warn;error
+	// +kubebuilder:default=info
+	// +optional
+	LogLevel string `json:"logLevel,omitempty"`
+
+	// AuthzBootstrapOwners are the principals that always hold owner on
+	// global:root. Defaults to kubectl-ate's service account,
+	// system:serviceaccount:ate-system:ate-client, which makes anyone who
+	// can mint its token a global owner; set your operators' own principals
+	// for a shared install.
+	// +optional
+	AuthzBootstrapOwners []string `json:"authzBootstrapOwners,omitempty"`
+
+	// EgressGatewayExtraSPIFFEIDs hold ate-api-server's egress_gateway role
+	// next to atenet-egress, such as a credential provider that mints actor
+	// JWTs. The role also reads actors and mints actor certificates.
+	// +optional
+	EgressGatewayExtraSPIFFEIDs []string `json:"egressGatewayExtraSPIFFEIDs,omitempty"`
 }
 
 // ActorJWTSpec configures actor identity JWTs.
