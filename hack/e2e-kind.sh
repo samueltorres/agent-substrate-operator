@@ -117,8 +117,11 @@ step "waiting for the SubstrateInstall to become Ready"
 "${kubectl[@]}" wait substrateinstall/substrate --for=condition=Ready --timeout=20m
 
 step "deploying the counter demo"
+# Releases do not publish the demo images, so the counter is built from source
+# into the kind registry.
 (cd "${work}/upstream" && go run ./cmd/ate-setup --no-dev-env --kind --kind-cluster-name "${cluster}" \
-  --image-repo "${images}" --image-tag "${version}" --rollout-timeout 5m deploy demo counter)
+  --ko-docker-repo "${registry}/substrate" --ko-default-platforms "linux/${arch}" \
+  --rollout-timeout 5m deploy demo counter)
 (cd "${work}/upstream" && go build -o "${work}/kubectl-ate" ./cmd/kubectl-ate)
 kubectl_ate=("${work}/kubectl-ate" --context "${context}")
 "${kubectl_ate[@]}" create actor e2e -a ate-demo-counter --template counter
