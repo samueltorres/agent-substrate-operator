@@ -5,7 +5,7 @@
 #
 # Each refs file lists the references one architecture's
 # hack/publish-substrate-images.sh run pushed, e.g.
-# ghcr.io/me/substrate/ateapi:v0.5.0-amd64@sha256:.... Every image named in
+# ghcr.io/me/substrate/ateapi:v1.0.0-amd64@sha256:.... Every image named in
 # any file becomes <registry/repository>/<image>:<tag>, an index over each
 # architecture's digest. Its annotations name the upstream tag it was built
 # from, and this repository as the source, which ghcr links the package to. The merged references are printed with their digests, one per line,

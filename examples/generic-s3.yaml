@@ -10,6 +10,7 @@ spec:
   platform: generic
   storage:
     backend: s3
+    snapshotLocation: s3://substrate-snapshots/
     s3:
       region: eu-west-1
       # A Secret in ate-system with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
@@ -22,4 +23,12 @@ spec:
   atenet:
     credentialProvider:
       name: k8s.io
+    # The clients the ingress router lets reach actors. Unset, none may.
+    ingressAllowedSPIFFEIDs:
+    - spiffe://cluster.local/ns/my-app/sa/my-app
+  apiServer:
+    # Who holds owner on global:root. The default is kubectl-ate's
+    # ate-system/ate-client service account.
+    authzBootstrapOwners:
+    - system:serviceaccount:platform:substrate-admin
   otlpEndpoint: http://otel-collector.observability.svc:4317

@@ -42,8 +42,17 @@ const (
 const DefaultImageRepository = "ghcr.io/samueltorres/substrate"
 
 // DefaultActorJWTIssuer is upstream's default iss claim for actor JWTs, the
-// in-cluster address of its identity provider service.
+// in-cluster address of ate-idp-server's Service.
 const DefaultActorJWTIssuer = "https://idp.ate-system.svc"
+
+// DefaultAuthzBootstrapOwner is upstream's default bootstrap owner:
+// kubectl-ate's service account, which the demos and e2e tests mint tokens
+// from.
+const DefaultAuthzBootstrapOwner = "system:serviceaccount:ate-system:ate-client"
+
+// KindSnapshotLocation is where kind keeps snapshots: the bucket its bundled
+// rustfs creates, as upstream's kind profile names it.
+const KindSnapshotLocation = "gs://ate-snapshots/"
 
 // installDir is the upstream manifest root.
 const installDir = "manifests/ate-install"
@@ -114,6 +123,15 @@ func WithDefaults(spec v1alpha1.SubstrateInstallSpec) v1alpha1.SubstrateInstallS
 			spec.Storage.Backend = v1alpha1.StorageBackendGCS
 		}
 	}
+	if spec.Platform == v1alpha1.PlatformKind && spec.Storage.SnapshotLocation == "" {
+		spec.Storage.SnapshotLocation = KindSnapshotLocation
+	}
+	if spec.APIServer.LogLevel == "" {
+		spec.APIServer.LogLevel = "info"
+	}
+	if len(spec.APIServer.AuthzBootstrapOwners) == 0 {
+		spec.APIServer.AuthzBootstrapOwners = []string{DefaultAuthzBootstrapOwner}
+	}
 	if spec.ActorJWT.Algorithm == "" {
 		spec.ActorJWT.Algorithm = "ES256"
 	}
@@ -177,6 +195,14 @@ func validate(spec *v1alpha1.SubstrateInstallSpec) error {
 	if spec.Storage.Backend == v1alpha1.StorageBackendS3 && spec.Storage.S3 == nil {
 		return fmt.Errorf("storage.backend s3 needs storage.s3")
 	}
+	if err := validateSnapshotLocation(spec.Storage.SnapshotLocation); err != nil {
+		return err
+	}
+	// The credential exchange impersonates the transfer service account on
+	// GCS and refuses to start without one. kind's rustfs speaks S3.
+	if spec.Storage.Backend == v1alpha1.StorageBackendGCS && spec.Storage.TransferServiceAccount == "" {
+		return fmt.Errorf("storage.backend gcs needs storage.transferServiceAccount")
+	}
 	if _, err := provider(spec); err != nil {
 		return err
 	}
@@ -213,13 +239,13 @@ type renderer struct {
 	images images
 }
 
-// finish layers the cordon-control-plane component over a manifest when
-// asked, as upstream renders every control plane apply, resolves its images,
-// and decodes it.
+// finish layers the cordon-system-infra-components component over a manifest
+// when asked, as upstream renders every system infra apply, resolves its
+// images, and decodes it.
 func (r *renderer) finish(manifest []byte, cordon bool) ([]*Object, error) {
-	if cordon && r.spec.CordonControlPlane {
+	if cordon && r.spec.CordonSystemInfraComponents {
 		var err error
-		manifest, err = r.k.compose(manifest, upstreamPath(installDir, "components", "cordon-control-plane"))
+		manifest, err = r.k.compose(manifest, upstreamPath(installDir, "components", "cordon-system-infra-components"))
 		if err != nil {
 			return nil, err
 		}
@@ -398,6 +424,9 @@ func (r *renderer) system(in Inputs) (objs, createOnly []*Object, err error) {
 		overlay = "kind"
 	}
 	if objs, err = r.build(true, installDir, overlay); err != nil {
+		return nil, nil, err
+	}
+	if err := r.systemFlags(objs); err != nil {
 		return nil, nil, err
 	}
 

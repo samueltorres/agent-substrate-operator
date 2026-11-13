@@ -11,18 +11,19 @@ import (
 
 // koModulePath is the upstream module path the embedded manifests name images
 // by, as ko:// import paths.
-const koModulePath = "github.com/agent-substrate/substrate"
+const koModulePath = "go.ate.dev/substrate"
 
 // components are the packages upstream publishes images for at the embedded
-// release (cmd/ate-setup/internal/images.Components). A reference outside it
+// release (cmd/ate-setup/internal/images.released). A reference outside it
 // fails the render rather than guessing at an image that was never pushed.
 var components = []string{
+	"cmd/ate-idp-server",
 	"cmd/ateapi",
 	"cmd/atecontroller",
 	"cmd/atelet",
 	"cmd/atenet",
-	"cmd/ateom-gvisor",
-	"cmd/ateom-microvm",
+	"cmd/ateworker-gvisor",
+	"cmd/ateworker-microvm",
 	"cmd/credential-provider/kubernetes-secrets",
 	"cmd/objectstore-plugin",
 	"cmd/podcertcontroller",

@@ -11,6 +11,11 @@ spec:
     projectID: my-project
     clusterLocation: europe-west4
     clusterName: substrate
+  storage:
+    snapshotLocation: gs://my-project-ate-snapshots/
+    # Created by tools/setup-gcp; ate-api-server impersonates it to hand
+    # atelet tokens scoped to one actor's snapshots.
+    transferServiceAccount: ate-snapshot-transfer@my-project.iam.gserviceaccount.com
   postgres:
     cloudSQL:
       instance: my-project:europe-west4:substrate
@@ -18,4 +23,4 @@ spec:
   atenet:
     credentialProvider:
       name: k8s.io
-  cordonControlPlane: true
+  cordonSystemInfraComponents: true

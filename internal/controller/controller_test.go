@@ -79,8 +79,9 @@ func validSpec() v1alpha1.SubstrateInstallSpec {
 		Platform: v1alpha1.PlatformGeneric,
 		Images:   v1alpha1.ImagesSpec{Repository: "registry.example.com/substrate"},
 		Storage: v1alpha1.StorageSpec{
-			Backend: v1alpha1.StorageBackendS3,
-			S3:      &v1alpha1.S3Spec{Region: "us-east-1"},
+			Backend:          v1alpha1.StorageBackendS3,
+			SnapshotLocation: "s3://substrate-snapshots/",
+			S3:               &v1alpha1.S3Spec{Region: "us-east-1"},
 		},
 		Atenet:         v1alpha1.AtenetSpec{CredentialProvider: v1alpha1.CredentialProviderSpec{Name: "k8s.io"}},
 		DeletionPolicy: v1alpha1.DeletionPolicyDelete,
@@ -99,6 +100,15 @@ func TestValidation(t *testing.T) {
 	}{
 		{name: "wrong name", obj: "other", want: "must be named substrate"},
 		{name: "kind with storage", mutate: func(s *v1alpha1.SubstrateInstallSpec) { s.Platform = v1alpha1.PlatformKind }, want: "bundled rustfs"},
+		{name: "no snapshot location", mutate: func(s *v1alpha1.SubstrateInstallSpec) {
+			s.Storage.SnapshotLocation = ""
+		}, want: "snapshotLocation is required"},
+		{name: "snapshot location without bucket", mutate: func(s *v1alpha1.SubstrateInstallSpec) {
+			s.Storage.SnapshotLocation = "s3:///prefix/"
+		}, want: "snapshotLocation"},
+		{name: "unknown log level", mutate: func(s *v1alpha1.SubstrateInstallSpec) {
+			s.APIServer.LogLevel = "verbose"
+		}, want: "logLevel"},
 		{name: "provider without name", mutate: func(s *v1alpha1.SubstrateInstallSpec) {
 			s.Atenet.CredentialProvider = v1alpha1.CredentialProviderSpec{}
 		}, want: "set name"},
@@ -275,7 +285,7 @@ func TestInstallLifecycle(t *testing.T) {
 	if got = reconcileOnce(t, ctx, r); got.Status.Step != "Postgres" {
 		t.Fatalf("step = %q (%v), want Postgres", got.Status.Step, got.Status.Conditions)
 	}
-	if !exists(t, ctx, &unstructured.Unstructured{Object: map[string]any{"apiVersion": "ate.dev/v1alpha1", "kind": "SandboxConfig"}}, "", "gvisor-default") {
+	if !exists(t, ctx, &unstructured.Unstructured{Object: map[string]any{"apiVersion": "ate.dev/v1", "kind": "SandboxConfig"}}, "", "gvisor-default") {
 		t.Error("default SandboxConfig not applied")
 	}
 

@@ -105,6 +105,9 @@ substrateInstall:
     atenet:
       credentialProvider:
         name: k8s.io
+      # kubectl ate proxy dials the router as this service account.
+      ingressAllowedSPIFFEIDs:
+      - spiffe://cluster.local/ns/ate-system/sa/atenet-client
     deletionPolicy: Delete
 EOF
 helm --kube-context "${context}" upgrade --install substrate-operator "${root}/charts/agent-substrate-operator" \
@@ -120,14 +123,16 @@ step "deploying the counter demo"
 kubectl_ate=("${work}/kubectl-ate" --context "${context}")
 "${kubectl_ate[@]}" create actor e2e -a ate-demo-counter --template counter
 
-"${kubectl[@]}" -n ate-system port-forward svc/atenet-router 18000:80 >/dev/null 2>&1 &
+# The router admits only allowlisted mTLS clients; the proxy is one, and
+# serves the actor on localhost:8000.
+"${kubectl_ate[@]}" proxy actor e2e -a ate-demo-counter >/dev/null 2>&1 &
 port_forward=$!
-sleep 3
+sleep 5
 
 # expect_count sends one request and checks the counter the actor reports.
 expect_count() {
   local got
-  got="$(curl -sS --fail -m 120 -X POST -H "ate-target-actor: ate-demo-counter/e2e" http://localhost:18000/)"
+  got="$(curl -sS --fail -m 120 -X POST http://localhost:8000/)"
   echo "${got}"
   if [[ "${got}" != *"preserved memory count: $1 |"* || "${got}" != *"preserved rootfs counter: $1"* ]]; then
     echo "want count $1" >&2

@@ -1,4 +1,4 @@
-// Copyright 2026 Google LLC
+// Copyright 2026 The Agent Substrate Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,9 +53,9 @@ func patchEgress(raw []byte, extproc string, provider credentialProvider) ([]byt
 	if provider.enabled() {
 		flags = fmt.Sprintf(`- --credential-provider-name=%s
 - --credential-provider-address=%s
+- --credential-provider-server-name=%s
 - --credential-provider-ca-file=/run/servicedns.podcert.ate.dev/trust-bundle.pem
-- --credential-provider-client-cert=/run/podidentity.podcert.ate.dev/credential-bundle.pem
-- --credential-provider-server-name=%s`, provider.name, provider.address, provider.serverName())
+- --credential-provider-client-cert=/run/podidentity.podcert.ate.dev/credential-bundle.pem`, provider.name, provider.address, provider.serverName())
 	}
 	return replaceMarker(raw, "#ATE_EGRESS_INJECT_FLAGS", flags, 1)
 }

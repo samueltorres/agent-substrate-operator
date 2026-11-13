@@ -3,7 +3,7 @@
 # script at a release tag into internal/upstream, where the operator embeds
 # them.
 #
-#   hack/sync-upstream.sh ~/src/github.com/agent-substrate/substrate v0.5.0
+#   hack/sync-upstream.sh ~/src/github.com/agent-substrate/substrate v1.0.0
 
 set -o errexit -o nounset -o pipefail
 
@@ -30,6 +30,9 @@ git -C "${upstream}" archive "${tag}" \
 rm -rf "${dest}"
 mkdir -p "${dest}"
 cp -R "${tmp}/manifests" "${dest}/manifests"
+# Upstream keeps Go embedding helpers beside some manifests; here they would
+# compile as packages of this module.
+find "${dest}/manifests" -name '*.go' -delete
 cp "${tmp}/pkg/postgressetup/setup.sql" "${dest}/setup.sql"
 cp "${tmp}/LICENSE" "${dest}/LICENSE"
 echo "${tag}" >"${dest}/VERSION"

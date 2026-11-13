@@ -16,6 +16,7 @@ const (
 	secretAPIEnvVars       = "ate-api-server-secret-envvars"
 	secretPostgresServerCA = "postgres-server-ca"
 	configMapAPIAuthn      = "ate-api-authentication"
+	configMapAPIConfig     = "ate-api-config"
 )
 
 // Keys of the Secret spec.postgres.connectionSecretName names.
@@ -88,6 +89,10 @@ func apiServerConfig(spec *v1alpha1.SubstrateInstallSpec, issuer string, externa
 		envVars["ATE_API_POSTGRES_POOL_MAX_CONNS"] = pg.PoolMaxConns
 	}
 	envVars["ATE_API_ACTOR_JWT_ISSUER"] = spec.ActorJWT.Issuer
+	// Written even when empty, so the objectstore sidecar's argument is never
+	// the literal $(ATE_API_SNAPSHOT_TRANSFER_SERVICE_ACCOUNT).
+	envVars["ATE_API_SNAPSHOT_TRANSFER_SERVICE_ACCOUNT"] = spec.Storage.TransferServiceAccount
+	envVars["ATE_API_SNAPSHOT_LOCATION"] = spec.Storage.SnapshotLocation
 
 	authn := spec.APIServer.AuthenticationConfig
 	if authn == "" {
@@ -102,6 +107,7 @@ func apiServerConfig(spec *v1alpha1.SubstrateInstallSpec, issuer string, externa
 			"ATE_API_POSTGRES_SCHEMA":                       []byte(orDefault(pg.Schema, postgresSchema)),
 		}),
 		configMap(configMapAPIAuthn, map[string]string{"authentication.yaml": authn}),
+		configMap(configMapAPIConfig, map[string]string{"apiconfig.textproto": apiConfig(spec.APIServer.LogLevel)}),
 	}
 	if len(serverCA) > 0 {
 		objs = append(objs, secret(secretPostgresServerCA, map[string][]byte{"server-ca.pem": serverCA}))
@@ -122,10 +128,10 @@ func GKEIssuer(gcp *v1alpha1.GCPSpec) string {
 // authenticationConfig renders authentication.yaml for the cluster's service
 // account issuer. An in-cluster issuer is not reachable over public
 // discovery, so ate-api-server is pointed at its own service account CA and
-// token for the OIDC discovery handshake.
+// token for the OIDC discovery handshake. ate-api-server parses it strictly.
 func authenticationConfig(issuer string) string {
 	config := fmt.Sprintf(
-		"actorIdentityJWTProvider: kubernetes\njwtProviders:\n- name: kubernetes\n  issuer: %s\n  audiences: [api.ate-system.svc]\n",
+		"jwtProviders:\n- name: kubernetes\n  issuer: %s\n  audiences:\n  - api.ate-system.svc\n",
 		issuer)
 	switch issuer {
 	case InClusterIssuer, InClusterIssuer + ".cluster.local":
@@ -133,6 +139,11 @@ func authenticationConfig(issuer string) string {
 			"  discoveryTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token\n"
 	}
 	return strings.TrimRight(config, "\n")
+}
+
+// apiConfig renders apiconfig.textproto, ate-api-server's APIConfig.
+func apiConfig(logLevel string) string {
+	return fmt.Sprintf("logging: {\n  level: %q\n}\n", logLevel)
 }
 
 // gsaEmailSuffix is trimmed off the Google service account email to get the
